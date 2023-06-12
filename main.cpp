@@ -36,7 +36,11 @@ class IMobileDrawer;
 class ITabletDisplay;
 
 
-class ISpellChecker;
+class ISpellChecker
+{
+public:
+  virtual bool operator()(const string&) const = 0;
+};
 
 
 class GraphEngineManager // Взят из библиоткеи двумерных примитивов
@@ -72,7 +76,7 @@ public:
   virtual pair<int, int> GetGabarit() const { return pair<int,int>(-1,-1); }
   virtual void SetFont( const string& , int fontSize, bool italic, bool bold, long int displayMask ) const = 0;
   virtual void SetLineWidth( long int width ) const = 0;
-  
+  virtual long int GetLineWidth() const = 0;
   
   virtual bool SetGabarit( const std::pair<int, int>& ) const = 0;
   
@@ -100,7 +104,7 @@ public:
   std::pair<int, int> GetGabarit() const  override; // implemented in cpp
   void SetFont( const std::string& , int fontSize, bool italic, bool bold, long int displayMask ) const  override; // implemented in cpp
   void SetLineWidth( long int width ) const  override {/*nothing to implement*/};
-  
+  long int GetLineWidth() const override { return -1; }
   
   bool SetGabarit( const std::pair<int, int>& ) const  override {/*nothing to implement*/ return false;};
   
@@ -149,6 +153,7 @@ public:
   std::pair<int, int> GetGabarit() const  override; // implemented in cpp
   void SetFont( const std::string& , int fontSize, bool italic, bool bold, long int displayMask ) const  override {/*не требуется реализация*/}
   void SetLineWidth( long int width ) const  override; // implememnted in cpp
+  long int GetLineWidth() const override; // implememnted in cpp
   
   
   bool SetGabarit( const std::pair<int, int>& ) const  override{ /* CalculateGabarit; Scale*/ return true;};
@@ -215,6 +220,42 @@ vector<shared_ptr<FormattedText>> FindTextByPattern( TextDocument& doc, ITextPat
     }
   }
   return result;
+}
+
+
+void SpellCheck( TextDocument& doc, ISpellChecker& sc )
+{
+  for( size_t iBlock = 0; iBlock < doc.CountItems(); iBlock++ )
+  {
+    auto block = doc.TextItem(iBlock);
+    if ( auto asParagrgaph = dynamic_cast<Paragraph*>(block.get()) )
+    {
+      for( auto iText = 0; iText < asParagrgaph->CountItems(); iText++ )
+      {
+        if ( auto asText = dynamic_cast<FormattedText*>(asParagrgaph->TextItem( iText ).get()) )
+        {
+          if ( !sc( asText->Text() ) )
+          {
+            // inform user
+          }
+        }
+      }
+    }
+  }
+}
+
+
+void SetLineWidthGreaterThan( TextDocument& doc, long int minimalWidth )
+{
+  for( size_t iBlock = 0; iBlock < doc.CountItems(); iBlock++ )
+  {
+    auto block = doc.TextItem(iBlock);
+    if ( auto asFigure = dynamic_cast<Figure*>(block.get()) )
+    {
+      if ( asFigure->GetLineWidth() < minimalWidth )
+        asFigure->SetLineWidth( minimalWidth );
+    }
+  }
 }
 
 
