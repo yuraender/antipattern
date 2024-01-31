@@ -67,11 +67,10 @@ class TextStyle {
   bool bold, italic, underlined, crossed;
 
   public:
-  TextStyle(const string& name, unsigned int col, unsigned int backgr, string& fnt, const array<bool, 4>& textDecor)
-      : styleName{name}, color(col), background(backgr), font(fnt), bold(textDecor[0]), italic(textDecor[1]),
-        underlined(textDecor[2]), crossed(textDecor[3]) {}
-
-  TextStyle() = default;
+  TextStyle(const string& name, unsigned int col, unsigned int backgr, string& fnt, unsigned int fntSize,
+            const array<bool, 4>& textDecor
+  ): styleName{name}, color(col), background(backgr), font(fnt), fontSize(fntSize), bold(textDecor[0]),
+     italic(textDecor[1]), underlined(textDecor[2]), crossed(textDecor[3]) {}
 
   TextStyle(const TextStyle&) = default;
 };
@@ -115,7 +114,7 @@ class FormattedText : public ITextEditorItem {
 
   long int GetLineWidth() const override { return -1; }
 
-  bool SetGabarit(const std::pair<int, int>&) const override {/*nothing to implement*/ return false; };
+  bool SetGabarit(const std::pair<int, int>&) const override { /*nothing to implement */ return false; };
 
   void SaveFile(IODTWriter*) override {} // implemented in cpp
 
@@ -128,8 +127,8 @@ class FormattedText : public ITextEditorItem {
   TextStyle GetStyle() {
     array<bool, 4> textMod{bold, italic, underlined, crossed};
     //TextStyle result{ string{}, color, background, font, array<bool,4>{ bold, italic, underlined, crossed } };
-    TextStyle st(string{}, color, background, font, textMod);
-    return styleInheritFrom ? *styleInheritFrom.get() : st;
+    TextStyle st(string{}, color, background, font, fontSize, textMod);
+    return styleInheritFrom ? *styleInheritFrom : st;
   }
 
   private:
