@@ -46,7 +46,7 @@ class ISpellChecker {
   virtual bool operator()(const string&) const = 0;
 };
 
-class GraphEngineManager // Взят из библиотеки двумерных примитивов
+class IGraphEngineManager // Взят из библиотеки двумерных примитивов
 {
   public:
   virtual void Activate(const char* key) = 0;
@@ -55,6 +55,40 @@ class GraphEngineManager // Взят из библиотеки двумерны�
 
   virtual int LastErrorCode() = 0;
 };
+
+class GraphEngineManager : IGraphEngineManager {
+  public:
+  GraphEngineManager(const GraphEngineManager&) = delete;
+
+  GraphEngineManager& operator=(const GraphEngineManager&) = delete;
+
+  void Activate(const char* key) override {}
+
+  bool ActivateState() const override { return false; }
+
+  int LastErrorCode() override { return 0; }
+
+  static GraphEngineManager* GetInstance() {
+    if (instance == nullptr) {
+      std::lock_guard<std::mutex> lock(mutex);
+      if (instance == nullptr) {
+        instance = new GraphEngineManager();
+      }
+    }
+    return instance;
+  }
+
+  private:
+  GraphEngineManager() {}
+
+  ~GraphEngineManager() {}
+
+  static GraphEngineManager* instance;
+  static std::mutex mutex;
+};
+
+GraphEngineManager* GraphEngineManager::instance = nullptr;
+std::mutex GraphEngineManager::mutex;
 
 class IPlaneItem; // Определён в библиотеке двумерных примитивов
 
@@ -152,10 +186,10 @@ class Paragraph : public ITextEditorItem {
 
 class Figure : public ITextEditorItem {
   public:
-  Figure(int col, int back, GraphEngineManager& geomToolkit, const char* keyToActivate)
-      : color(col), background(back), shapeItems(), geometricEngine(&geomToolkit) {
-    if (!geometricEngine->ActivateState())
-      geometricEngine->Activate(keyToActivate);
+  Figure(int col, int back, const char* keyToActivate)
+      : color(col), background(back), shapeItems() {
+    if (!GraphEngineManager::GetInstance()->ActivateState())
+      GraphEngineManager::GetInstance()->Activate(keyToActivate);
   }
 
   bool CheckSpelling(const ISpellChecker&) override { return false; }
@@ -180,7 +214,6 @@ class Figure : public ITextEditorItem {
   private:
   unsigned int color, background;
   vector<shared_ptr<IPlaneItem>> shapeItems;
-  GraphEngineManager* geometricEngine;
 };
 
 class TextDocument {
