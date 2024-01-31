@@ -68,26 +68,24 @@ class GraphEngineManager : IGraphEngineManager {
 
   int LastErrorCode() override { return 0; }
 
-  static GraphEngineManager* GetInstance() {
+  static GraphEngineManager& GetInstance() {
     if (instance == nullptr) {
       std::lock_guard<std::mutex> lock(mutex);
       if (instance == nullptr) {
-        instance = new GraphEngineManager();
+        instance = std::unique_ptr<GraphEngineManager>(new GraphEngineManager());
       }
     }
-    return instance;
+    return *instance;
   }
 
   private:
   GraphEngineManager() {}
 
-  ~GraphEngineManager() {}
-
-  static GraphEngineManager* instance;
+  static std::unique_ptr<GraphEngineManager> instance;
   static std::mutex mutex;
 };
 
-GraphEngineManager* GraphEngineManager::instance = nullptr;
+std::unique_ptr<GraphEngineManager> GraphEngineManager::instance = nullptr;
 std::mutex GraphEngineManager::mutex;
 
 class IPlaneItem; // Определён в библиотеке двумерных примитивов
