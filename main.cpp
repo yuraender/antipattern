@@ -28,6 +28,7 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include "patterns/iterator.h"
 
 using namespace std;
 
@@ -142,11 +143,11 @@ class FormattedText : public ITextEditorItem {
       const std::string&, int fontSize, bool italic, bool bold, long int displayMask
   ) const override {} // implemented in cpp
 
-  void SetLineWidth(long int width) const override { /* nothing to implement */ };
+  void SetLineWidth(long int width) const override { /* nothing to implement */ }
 
   long int GetLineWidth() const override { return -1; }
 
-  bool SetGabarit(const std::pair<int, int>&) const override { /*nothing to implement */ return false; };
+  bool SetGabarit(const std::pair<int, int>&) const override { /*nothing to implement */ return false; }
 
   void SaveFile(IODTWriter*) override {} // implemented in cpp
 
@@ -174,9 +175,9 @@ class FormattedText : public ITextEditorItem {
 
 class Paragraph : public ITextEditorItem {
   public:
-  size_t CountItems() const { return textItems.size(); }
-
-  shared_ptr<ITextEditorItem> TextItem(size_t index) { return textItems.at(index); }
+  VectorIterator<shared_ptr<FormattedText>> iterator() {
+    return VectorIterator<shared_ptr<FormattedText>>{textItems};
+  }
 
   private:
   vector<shared_ptr<FormattedText>> textItems;
@@ -186,28 +187,32 @@ class Figure : public ITextEditorItem {
   public:
   Figure(int col, int back, const char* keyToActivate)
       : color(col), background(back), shapeItems() {
-    if (!GraphEngineManager::GetInstance()->ActivateState())
-      GraphEngineManager::GetInstance()->Activate(keyToActivate);
+    if (!GraphEngineManager::GetInstance().ActivateState())
+      GraphEngineManager::GetInstance().Activate(keyToActivate);
   }
 
   bool CheckSpelling(const ISpellChecker&) override { return false; }
 
-  std::pair<int, int> GetGabarit() const override; // implemented in cpp
+  std::pair<int, int> GetGabarit() const override { return std::pair{-1, -1}; } // implemented in cpp
 
   void SetFont(const std::string&, int fontSize, bool italic, bool bold,
                long int displayMask) const override { /* не требуется реализация */ }
 
-  void SetLineWidth(long int width) const override; // implemented in cpp
+  void SetLineWidth(long int width) const override {} // implemented in cpp
 
-  long int GetLineWidth() const override; // implemented in cpp
+  long int GetLineWidth() const override { return -1; } // implemented in cpp
 
-  bool SetGabarit(const std::pair<int, int>&) const override { /* CalculateGabarit; Scale */ return true; };
+  bool SetGabarit(const std::pair<int, int>&) const override { /* CalculateGabarit; Scale */ return true; }
 
-  void SaveFile(IODTWriter*) override; // implemented in cpp
+  void SaveFile(IODTWriter*) override {} // implemented in cpp
 
-  void ToWindow(IWindowManager*) override; // implemented in cpp
+  void ToWindow(IWindowManager*) override {} // implemented in cpp
 
-  bool ToPDF(IPDFWriter&) override; // implemented in cpp, returns true
+  bool ToPDF(IPDFWriter&) override { return true; } // implemented in cpp, returns true
+
+  VectorIterator<shared_ptr<IPlaneItem>> iterator() {
+    return VectorIterator<shared_ptr<IPlaneItem>>{shapeItems};
+  }
 
   private:
   unsigned int color, background;
@@ -215,18 +220,23 @@ class Figure : public ITextEditorItem {
 };
 
 class TextDocument {
-  vector<shared_ptr<ITextEditorItem>> textItems;
   public:
   bool InsertItem(ITextEditorItem& itemToAdd, const ITextEditorItem* insertAfter) {
     if (dynamic_cast<FormattedText*>(&itemToAdd))
       return false;
-    else
+    else {
+      shared_ptr<ITextEditorItem> sptr(&itemToAdd);
+      textItems.push_back(sptr);
       return true; // И реально вставляем элемент
+    }
   }
 
-  size_t CountItems() const { return textItems.size(); }
+  VectorIterator<shared_ptr<ITextEditorItem>> iterator() {
+    return VectorIterator<shared_ptr<ITextEditorItem>>{textItems};
+  }
 
-  shared_ptr<ITextEditorItem> TextItem(size_t index) { return textItems.at(index); }
+  private:
+  vector<shared_ptr<ITextEditorItem>> textItems;
 };
 
 struct ITextPatternFinder {
@@ -241,11 +251,12 @@ vector<shared_ptr<FormattedText>> FindTextByPattern(
     TextDocument& doc, ITextPatternFinder& pattern, IStylePatternFinder* stylePattern
 ) {
   vector<shared_ptr<FormattedText>> result;
-  for (size_t iBlock = 0; iBlock < doc.CountItems(); iBlock++) {
-    auto block = doc.TextItem(iBlock);
+  for (auto it = doc.iterator(); *it != nullptr; ++it) {
+    auto block = *it;
     if (auto asParagraph = dynamic_cast<Paragraph*>(block.get())) {
-      for (auto iText = 0; iText < asParagraph->CountItems(); iText++) {
-        if (auto asText = dynamic_cast<FormattedText*>(asParagraph->TextItem(iText).get())) {
+      for (auto itText = asParagraph->iterator(); *itText != nullptr; ++itText) {
+        auto text = *itText;
+        if (auto asText = dynamic_cast<FormattedText*>(text.get())) {
           if (pattern(asText->Text())) {
             if (stylePattern) {
               if ((*stylePattern)(asText->GetStyle()))
@@ -261,11 +272,12 @@ vector<shared_ptr<FormattedText>> FindTextByPattern(
 }
 
 void SpellCheck(TextDocument& doc, ISpellChecker& sc) {
-  for (size_t iBlock = 0; iBlock < doc.CountItems(); iBlock++) {
-    auto block = doc.TextItem(iBlock);
+  for (auto it = doc.iterator(); *it != nullptr; ++it) {
+    auto block = *it;
     if (auto asParagraph = dynamic_cast<Paragraph*>(block.get())) {
-      for (auto iText = 0; iText < asParagraph->CountItems(); iText++) {
-        if (auto asText = dynamic_cast<FormattedText*>(asParagraph->TextItem(iText).get())) {
+      for (auto itText = asParagraph->iterator(); *itText != nullptr; ++itText) {
+        auto text = *itText;
+        if (auto asText = dynamic_cast<FormattedText*>(text.get())) {
           if (!sc(asText->Text())) {
             // inform user
           }
@@ -276,8 +288,8 @@ void SpellCheck(TextDocument& doc, ISpellChecker& sc) {
 }
 
 void SetLineWidthGreaterThan(TextDocument& doc, long int minimalWidth) {
-  for (size_t iBlock = 0; iBlock < doc.CountItems(); iBlock++) {
-    auto block = doc.TextItem(iBlock);
+  for (auto it = doc.iterator(); *it != nullptr; ++it) {
+    auto block = *it;
     if (auto asFigure = dynamic_cast<Figure*>(block.get())) {
       if (asFigure->GetLineWidth() < minimalWidth)
         asFigure->SetLineWidth(minimalWidth);
