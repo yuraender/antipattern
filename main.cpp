@@ -126,6 +126,8 @@ class TextStyle {
 
 class Text;
 
+class FormattedText;
+
 class Paragraph;
 
 class Figure;
@@ -133,6 +135,8 @@ class Figure;
 class ITextEditorItemVisitor {
   public:
   virtual void Visit(Text* item) = 0;
+
+  virtual void Visit(FormattedText* item) = 0;
 
   virtual void Visit(Paragraph* item) = 0;
 
@@ -170,6 +174,8 @@ class TextEditorItemVisitor : public ITextEditorItemVisitor {
   public:
   void Visit(Text* item) override {}
 
+  void Visit(FormattedText* item) override {}
+
   void Visit(Paragraph* item) override {}
 
   void Visit(Figure* item) override {}
@@ -197,13 +203,15 @@ class Text : public ITextEditorItem {
 
   bool ToPDF(IPDFWriter&) override { return true; } // implemented in cpp, returns true
 
-  virtual string GetText() const = 0;
+  virtual string GetText() const {
+    return text;
+  }
 
   void Accept(ITextEditorItemVisitor* visitor) override {
     visitor->Visit(this);
   }
 
-  private:
+  protected:
   string text;
 };
 
@@ -211,19 +219,18 @@ class FormattedText : public Text {
   public:
   FormattedText() {}
 
-  string GetText() const override {
-    return text;
-  }
-
   virtual TextStyle GetStyle() {
     array<bool, 4> textMod{bold, italic, underlined, crossed};
-    //TextStyle result{text->GetText(), color, background, font, array<bool,4>{bold, italic, underlined, crossed}};
-    TextStyle st(GetText(), color, background, font, fontSize, textMod);
+    //TextStyle result{string{}, color, background, font, array<bool,4>{bold, italic, underlined, crossed}};
+    TextStyle st(string{}, color, background, font, fontSize, textMod);
     return styleInheritFrom ? *styleInheritFrom : st;
   }
 
+  void Accept(ITextEditorItemVisitor* visitor) override {
+    visitor->Visit(this);
+  }
+
   private:
-  string text;
   unsigned int color, background;
   string font;
   unsigned int fontSize;
