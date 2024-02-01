@@ -91,37 +91,19 @@ std::mutex GraphEngineManager::mutex;
 
 class IPlaneItem; // Определён в библиотеке двумерных примитивов
 
-class TextStyle {
-  private:
+struct TextStyle {
   string styleName;
   unsigned int color, background;
   string font;
   unsigned int fontSize;
-  bool bold, italic, underlined, crossed;
+  bool bold, italic, underline, strikethrough;
 
-  public:
   TextStyle(const string& name, unsigned int col, unsigned int backgr, string& fnt, unsigned int fntSize,
             const array<bool, 4>& textDecor
   ): styleName{name}, color(col), background(backgr), font(fnt), fontSize(fntSize), bold(textDecor[0]),
-     italic(textDecor[1]), underlined(textDecor[2]), crossed(textDecor[3]) {}
+     italic(textDecor[1]), underline(textDecor[2]), strikethrough(textDecor[3]) {}
 
   TextStyle(const TextStyle&) = default;
-
-  void SetBold(bool bold) {
-    this->bold = bold;
-  }
-
-  void SetItalic(bool italic) {
-    this->italic = italic;
-  }
-
-  void SetUnderlined(bool underlined) {
-    this->underlined = underlined;
-  }
-
-  void SetCrossed(bool crossed) {
-    this->crossed = crossed;
-  }
 };
 
 class Text;
@@ -145,17 +127,9 @@ class ITextEditorItemVisitor {
 
 class ITextEditorItem {
   public:
-  virtual bool CheckSpelling(const ISpellChecker&) = 0;
+  virtual void SetLineWidth(long int width) const { /* nothing to implement */ }
 
-  virtual pair<int, int> GetGabarit() const { return pair<int, int>(-1, -1); }
-
-  virtual void SetFont(const string&, int fontSize, bool italic, bool bold, long int displayMask) const = 0;
-
-  virtual void SetLineWidth(long int width) const = 0;
-
-  virtual long int GetLineWidth() const = 0;
-
-  virtual bool SetGabarit(const std::pair<int, int>&) const = 0;
+  virtual long int GetLineWidth() const { return -1; }
 
   virtual void SaveFile(IODTWriter*) = 0;
 
@@ -183,19 +157,11 @@ class TextEditorItemVisitor : public ITextEditorItemVisitor {
 
 class Text : public ITextEditorItem {
   public:
-  bool CheckSpelling(const ISpellChecker&) override { return false; } // implemented in cpp
-
-  std::pair<int, int> GetGabarit() const override { return pair<int, int>(-1, -1); } // implemented in cpp
-
-  void SetFont(
-      const std::string&, int fontSize, bool italic, bool bold, long int displayMask
-  ) const override {} // implemented in cpp
+  virtual bool CheckSpelling(const ISpellChecker&) { return false; } // implemented in cpp
 
   void SetLineWidth(long int width) const override { /* nothing to implement */ }
 
   long int GetLineWidth() const override { return -1; }
-
-  bool SetGabarit(const std::pair<int, int>&) const override { /* nothing to implement */ return false; }
 
   void SaveFile(IODTWriter*) override {} // implemented in cpp
 
@@ -219,10 +185,13 @@ class FormattedText : public Text {
   public:
   FormattedText() {}
 
+  virtual void SetStyle(TextStyle& style) {
+    this->style = &style;
+  }
+
   virtual TextStyle GetStyle() {
-    array<bool, 4> textMod{bold, italic, underlined, crossed};
-    //TextStyle result{string{}, color, background, font, array<bool,4>{bold, italic, underlined, crossed}};
-    TextStyle st(string{}, color, background, font, fontSize, textMod);
+    array<bool, 4> textMod{style->bold, style->italic, style->underline, style->strikethrough};
+    TextStyle st(style->styleName, style->color, style->background, style->font, style->fontSize, textMod);
     return styleInheritFrom ? *styleInheritFrom : st;
   }
 
@@ -231,10 +200,7 @@ class FormattedText : public Text {
   }
 
   private:
-  unsigned int color, background;
-  string font;
-  unsigned int fontSize;
-  bool bold, italic, underlined, crossed;
+  TextStyle* style;
   shared_ptr<TextStyle> styleInheritFrom;
 };
 
@@ -258,7 +224,7 @@ class BoldText : public FormattedTextDecorator {
 
   TextStyle GetStyle() const override {
     TextStyle style = text->GetStyle();
-    style.SetBold(true);
+    style.bold = true;
     return style;
   }
 };
@@ -270,31 +236,31 @@ class ItalicText : public FormattedTextDecorator {
 
   TextStyle GetStyle() const override {
     TextStyle style = text->GetStyle();
-    style.SetItalic(true);
+    style.italic = true;
     return style;
   }
 };
 
-class UnderlinedText : public FormattedTextDecorator {
+class UnderlineText : public FormattedTextDecorator {
   public:
-  UnderlinedText(std::shared_ptr<FormattedText> text)
+  UnderlineText(std::shared_ptr<FormattedText> text)
       : FormattedTextDecorator(text) {}
 
   TextStyle GetStyle() const override {
     TextStyle style = text->GetStyle();
-    style.SetUnderlined(true);
+    style.underline = true;
     return style;
   }
 };
 
-class CrossedText : public FormattedTextDecorator {
+class StrikethroughText : public FormattedTextDecorator {
   public:
-  CrossedText(std::shared_ptr<FormattedText> text)
+  StrikethroughText(std::shared_ptr<FormattedText> text)
       : FormattedTextDecorator(text) {}
 
   TextStyle GetStyle() const override {
     TextStyle style = text->GetStyle();
-    style.SetCrossed(true);
+    style.strikethrough = true;
     return style;
   }
 };
@@ -321,15 +287,9 @@ class Figure : public ITextEditorItem {
       GraphEngineManager::GetInstance().Activate(keyToActivate);
   }
 
-  bool CheckSpelling(const ISpellChecker&) override { return false; }
+  virtual pair<int, int> GetGabarit() const { return std::pair{-1, -1}; } // implemented in cpp
 
-  std::pair<int, int> GetGabarit() const override { return std::pair{-1, -1}; } // implemented in cpp
-
-  void SetLineWidth(long int width) const override {} // implemented in cpp
-
-  long int GetLineWidth() const override { return -1; } // implemented in cpp
-
-  bool SetGabarit(const std::pair<int, int>&) const override { /* CalculateGabarit; Scale */ return true; }
+  bool SetGabarit(const std::pair<int, int>&) const { /* CalculateGabarit; Scale */ return true; }
 
   void SaveFile(IODTWriter*) override {} // implemented in cpp
 
@@ -355,8 +315,11 @@ class TextDocument {
   bool InsertItem(ITextEditorItem& itemToAdd, const ITextEditorItem* insertAfter) {
     if (dynamic_cast<Text*>(&itemToAdd))
       return false;
-    else
+    else {
+      std::shared_ptr<ITextEditorItem> sptr(&itemToAdd);
+      textItems.push_back(sptr);
       return true; // И реально вставляем элемент
+    }
   }
 
   VectorIterator<shared_ptr<ITextEditorItem>> iterator() {

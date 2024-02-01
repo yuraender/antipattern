@@ -5,39 +5,37 @@
 template<typename T, typename U>
 class Iterator {
   public:
-  Iterator() {}
+  Iterator() = default;
 
-  Iterator(const T& data)
+  explicit Iterator(const T& data)
       : data(data) {}
 
   virtual Iterator<T, U>& operator++() = 0;
 
   virtual U operator*() const = 0;
 
-  private:
-  T data{};
+  protected:
+  T data;
   size_t current = 0;
 };
 
 template<typename T>
-class VectorIterator : Iterator<std::vector<T>, T> {
+class VectorIterator : public Iterator<std::vector<T>, T> {
   public:
-  VectorIterator(const std::vector<T>& data)
-      : data(data) {}
+  VectorIterator() = default;
 
-  VectorIterator<T>& operator++() {
-    current++;
+  explicit VectorIterator(const std::vector<T>& data)
+      : Iterator<std::vector<T>, T>(data) {}
+
+  VectorIterator<T>& operator++() override {
+    this->current++;
     return *this;
   }
 
-  T operator*() const {
-    if (current < 0 || current > data.size() - 1) {
+  T operator*() const override {
+    if (this->current < 0 || this->current > this->data.size() - 1) {
       return nullptr;
     }
-    return this->data[current];
+    return this->data[this->current];
   }
-
-  private:
-  std::vector<T> data;
-  size_t current = 0;
 };
