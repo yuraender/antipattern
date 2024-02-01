@@ -106,9 +106,25 @@ class TextStyle {
      italic(textDecor[1]), underlined(textDecor[2]), crossed(textDecor[3]) {}
 
   TextStyle(const TextStyle&) = default;
+
+  void SetBold(bool bold) {
+    this->bold = bold;
+  }
+
+  void SetItalic(bool italic) {
+    this->italic = italic;
+  }
+
+  void SetUnderlined(bool underlined) {
+    this->underlined = underlined;
+  }
+
+  void SetCrossed(bool crossed) {
+    this->crossed = crossed;
+  }
 };
 
-class FormattedText;
+class Text;
 
 class Paragraph;
 
@@ -116,7 +132,7 @@ class Figure;
 
 class ITextEditorItemVisitor {
   public:
-  virtual void Visit(FormattedText* item) = 0;
+  virtual void Visit(Text* item) = 0;
 
   virtual void Visit(Paragraph* item) = 0;
 
@@ -152,14 +168,14 @@ class ITextEditorItem {
 
 class TextEditorItemVisitor : public ITextEditorItemVisitor {
   public:
-  void Visit(FormattedText* item) override {}
+  void Visit(Text* item) override {}
 
   void Visit(Paragraph* item) override {}
 
   void Visit(Figure* item) override {}
 };
 
-class FormattedText : public ITextEditorItem {
+class Text : public ITextEditorItem {
   public:
   bool CheckSpelling(const ISpellChecker&) override { return false; } // implemented in cpp
 
@@ -173,7 +189,7 @@ class FormattedText : public ITextEditorItem {
 
   long int GetLineWidth() const override { return -1; }
 
-  bool SetGabarit(const std::pair<int, int>&) const override { /*nothing to implement */ return false; }
+  bool SetGabarit(const std::pair<int, int>&) const override { /* nothing to implement */ return false; }
 
   void SaveFile(IODTWriter*) override {} // implemented in cpp
 
@@ -181,17 +197,29 @@ class FormattedText : public ITextEditorItem {
 
   bool ToPDF(IPDFWriter&) override { return true; } // implemented in cpp, returns true
 
-  string Text() const { return text; }
-
-  TextStyle GetStyle() {
-    array<bool, 4> textMod{bold, italic, underlined, crossed};
-    //TextStyle result{ string{}, color, background, font, array<bool,4>{ bold, italic, underlined, crossed } };
-    TextStyle st(string{}, color, background, font, fontSize, textMod);
-    return styleInheritFrom ? *styleInheritFrom : st;
-  }
+  virtual string GetText() const = 0;
 
   void Accept(ITextEditorItemVisitor* visitor) override {
     visitor->Visit(this);
+  }
+
+  private:
+  string text;
+};
+
+class FormattedText : public Text {
+  public:
+  FormattedText() {}
+
+  string GetText() const override {
+    return text;
+  }
+
+  virtual TextStyle GetStyle() {
+    array<bool, 4> textMod{bold, italic, underlined, crossed};
+    //TextStyle result{text->GetText(), color, background, font, array<bool,4>{bold, italic, underlined, crossed}};
+    TextStyle st(GetText(), color, background, font, fontSize, textMod);
+    return styleInheritFrom ? *styleInheritFrom : st;
   }
 
   private:
@@ -203,18 +231,79 @@ class FormattedText : public ITextEditorItem {
   shared_ptr<TextStyle> styleInheritFrom;
 };
 
+class FormattedTextDecorator : public FormattedText {
+  public:
+  FormattedTextDecorator(std::shared_ptr<FormattedText> text)
+      : text(text) {}
+
+  virtual TextStyle GetStyle() const {
+    return text->GetStyle();
+  }
+
+  protected:
+  std::shared_ptr<FormattedText> text;
+};
+
+class BoldText : public FormattedTextDecorator {
+  public:
+  BoldText(std::shared_ptr<FormattedText> text)
+      : FormattedTextDecorator(text) {}
+
+  TextStyle GetStyle() const override {
+    TextStyle style = text->GetStyle();
+    style.SetBold(true);
+    return style;
+  }
+};
+
+class ItalicText : public FormattedTextDecorator {
+  public:
+  ItalicText(std::shared_ptr<FormattedText> text)
+      : FormattedTextDecorator(text) {}
+
+  TextStyle GetStyle() const override {
+    TextStyle style = text->GetStyle();
+    style.SetItalic(true);
+    return style;
+  }
+};
+
+class UnderlinedText : public FormattedTextDecorator {
+  public:
+  UnderlinedText(std::shared_ptr<FormattedText> text)
+      : FormattedTextDecorator(text) {}
+
+  TextStyle GetStyle() const override {
+    TextStyle style = text->GetStyle();
+    style.SetUnderlined(true);
+    return style;
+  }
+};
+
+class CrossedText : public FormattedTextDecorator {
+  public:
+  CrossedText(std::shared_ptr<FormattedText> text)
+      : FormattedTextDecorator(text) {}
+
+  TextStyle GetStyle() const override {
+    TextStyle style = text->GetStyle();
+    style.SetCrossed(true);
+    return style;
+  }
+};
+
 class Paragraph : public ITextEditorItem {
   public:
   void Accept(ITextEditorItemVisitor* visitor) override {
     visitor->Visit(this);
   }
 
-  VectorIterator<shared_ptr<FormattedText>> iterator() {
-    return VectorIterator<shared_ptr<FormattedText>>{textItems};
+  VectorIterator<shared_ptr<Text>> iterator() {
+    return VectorIterator<shared_ptr<Text>>{textItems};
   }
 
   private:
-  vector<shared_ptr<FormattedText>> textItems;
+  vector<shared_ptr<Text>> textItems;
 };
 
 class Figure : public ITextEditorItem {
@@ -228,9 +317,6 @@ class Figure : public ITextEditorItem {
   bool CheckSpelling(const ISpellChecker&) override { return false; }
 
   std::pair<int, int> GetGabarit() const override { return std::pair{-1, -1}; } // implemented in cpp
-
-  void SetFont(const std::string&, int fontSize, bool italic, bool bold,
-               long int displayMask) const override { /* не требуется реализация */ }
 
   void SetLineWidth(long int width) const override {} // implemented in cpp
 
@@ -260,7 +346,7 @@ class Figure : public ITextEditorItem {
 class TextDocument {
   public:
   bool InsertItem(ITextEditorItem& itemToAdd, const ITextEditorItem* insertAfter) {
-    if (dynamic_cast<FormattedText*>(&itemToAdd))
+    if (dynamic_cast<Text*>(&itemToAdd))
       return false;
     else
       return true; // И реально вставляем элемент
@@ -282,22 +368,24 @@ struct IStylePatternFinder {
   virtual bool operator()(const TextStyle&) const = 0;
 };
 
-vector<shared_ptr<FormattedText>> FindTextByPattern(
+vector<shared_ptr<Text>> FindTextByPattern(
     TextDocument& doc, ITextPatternFinder& pattern, IStylePatternFinder* stylePattern
 ) {
-  vector<shared_ptr<FormattedText>> result;
+  vector<shared_ptr<Text>> result;
   for (auto it = doc.iterator(); *it != nullptr; ++it) {
     auto block = *it;
     if (auto asParagraph = dynamic_cast<Paragraph*>(block.get())) {
       for (auto itText = asParagraph->iterator(); *itText != nullptr; ++itText) {
         auto text = *itText;
-        if (auto asText = dynamic_cast<FormattedText*>(text.get())) {
-          if (pattern(asText->Text())) {
+        if (auto asText = dynamic_cast<Text*>(text.get())) {
+          if (pattern(asText->GetText())) {
             if (stylePattern) {
-              if ((*stylePattern)(asText->GetStyle()))
-                result.push_back(shared_ptr<FormattedText>(asText));
+              if (auto asFormattedText = dynamic_cast<FormattedText*>(text.get())) {
+                if ((*stylePattern)(asFormattedText->GetStyle()))
+                  result.push_back(shared_ptr<FormattedText>(asFormattedText));
+              }
             } else
-              result.push_back(shared_ptr<FormattedText>(asText));
+              result.push_back(shared_ptr<Text>(asText));
           }
         }
       }
@@ -312,8 +400,8 @@ void SpellCheck(TextDocument& doc, ISpellChecker& sc) {
     if (auto asParagraph = dynamic_cast<Paragraph*>(block.get())) {
       for (auto itText = asParagraph->iterator(); *itText != nullptr; ++itText) {
         auto text = *itText;
-        if (auto asText = dynamic_cast<FormattedText*>(text.get())) {
-          if (!sc(asText->Text())) {
+        if (auto asText = dynamic_cast<Text*>(text.get())) {
+          if (!sc(asText->GetText())) {
             // inform user
           }
         }
