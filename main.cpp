@@ -108,6 +108,21 @@ class TextStyle {
   TextStyle(const TextStyle&) = default;
 };
 
+class FormattedText;
+
+class Paragraph;
+
+class Figure;
+
+class ITextEditorItemVisitor {
+  public:
+  virtual void Visit(FormattedText* item) = 0;
+
+  virtual void Visit(Paragraph* item) = 0;
+
+  virtual void Visit(Figure* item) = 0;
+};
+
 class ITextEditorItem {
   public:
   virtual bool CheckSpelling(const ISpellChecker&) = 0;
@@ -126,11 +141,22 @@ class ITextEditorItem {
 
   virtual void ToWindow(IWindowManager*) = 0;
 
-  virtual bool ToPDF(IPDFWriter&) { return false; }
+  virtual bool ToPDF(IPDFWriter&) = 0;
 
   //Зарезервировано на будущую разработку
   //virtual bool ToMobile( IMobileDrawer ) = 0;
   //virtual bool ToTablet( ITabletDisplay ) = 0;
+
+  virtual void Accept(ITextEditorItemVisitor* visitor) = 0;
+};
+
+class TextEditorItemVisitor : public ITextEditorItemVisitor {
+  public:
+  void Visit(FormattedText* item) override {}
+
+  void Visit(Paragraph* item) override {}
+
+  void Visit(Figure* item) override {}
 };
 
 class FormattedText : public ITextEditorItem {
@@ -164,6 +190,10 @@ class FormattedText : public ITextEditorItem {
     return styleInheritFrom ? *styleInheritFrom : st;
   }
 
+  void Accept(ITextEditorItemVisitor* visitor) override {
+    visitor->Visit(this);
+  }
+
   private:
   string text;
   unsigned int color, background;
@@ -175,6 +205,10 @@ class FormattedText : public ITextEditorItem {
 
 class Paragraph : public ITextEditorItem {
   public:
+  void Accept(ITextEditorItemVisitor* visitor) override {
+    visitor->Visit(this);
+  }
+
   VectorIterator<shared_ptr<FormattedText>> iterator() {
     return VectorIterator<shared_ptr<FormattedText>>{textItems};
   }
@@ -210,6 +244,10 @@ class Figure : public ITextEditorItem {
 
   bool ToPDF(IPDFWriter&) override { return true; } // implemented in cpp, returns true
 
+  void Accept(ITextEditorItemVisitor* visitor) override {
+    visitor->Visit(this);
+  }
+
   VectorIterator<shared_ptr<IPlaneItem>> iterator() {
     return VectorIterator<shared_ptr<IPlaneItem>>{shapeItems};
   }
@@ -224,11 +262,8 @@ class TextDocument {
   bool InsertItem(ITextEditorItem& itemToAdd, const ITextEditorItem* insertAfter) {
     if (dynamic_cast<FormattedText*>(&itemToAdd))
       return false;
-    else {
-      shared_ptr<ITextEditorItem> sptr(&itemToAdd);
-      textItems.push_back(sptr);
+    else
       return true; // И реально вставляем элемент
-    }
   }
 
   VectorIterator<shared_ptr<ITextEditorItem>> iterator() {
